@@ -12,9 +12,13 @@ def process_output_dataset(base_dir):
             file1 = find_file_in_subdir(os.path.join(folder_path, "1"))
             file2 = find_file_in_subdir(os.path.join(folder_path, "2"))
 
+            with open(file1, "r") as f1, open(file2, "r") as f2:
+                code1 = f1.read()
+                code2 = f2.read()
+
             if file1 and file2:
                 print(f"Processing pair: {file1} and {file2}")
-                print(f"Type: {detect_clone_type(file1, file2)}")
+                print(f"Type: {detect_clone_type(code1, code2)}")
             else:
                 print(f"Missing files in folder: {folder_path}")
 
@@ -31,11 +35,11 @@ def find_file_in_subdir(base_subdir):
 
 
 if __name__ == "__main__":
-    base_dir = "/home/oskar/Documents/ITC/software-avanzado/reto/output_dataset"
+    base_dir = "/home/oskar/Documents/ITC/software-avanzado/reto/plagiarism_detection/output_dataset"
     # process_output_dataset(base_dir)
     # Example usage: Compare two specific files
-    file_path1 = "/home/oskar/Documents/ITC/software-avanzado/reto/dummy_1.py"
-    file_path2 = "/home/oskar/Documents/ITC/software-avanzado/reto/dummy_2.py"
+    file_path1 = "/home/oskar/Documents/ITC/software-avanzado/reto/plagiarism_detection/output_dataset/ar98/1/b/75/2/1685918.py"
+    file_path2 = "/home/oskar/Documents/ITC/software-avanzado/reto/plagiarism_detection/output_dataset/ar98/2/b/75/2/1685927.py"
 
     if os.path.exists(file_path1) and os.path.exists(file_path2):
         with open(file_path1, "r") as f1, open(file_path2, "r") as f2:
