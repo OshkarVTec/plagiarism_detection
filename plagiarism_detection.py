@@ -35,9 +35,10 @@ def detect_clone_type(code1, code2):
     # Check similarity
 
     similarity = calculate_similarity(tokenized_code1, tokenized_code2)
+    print(f"Similarity: {similarity}")
 
     # Type-3: Near-miss copies with small modifications (e.g., added/removed/changed statements)
-    if similarity > 0.7:  # Lower threshold for near-miss similarity
+    if similarity > 0.5:  # Lower threshold for near-miss similarity
         return "Type-3 Clone: Near-miss copy with small modifications"
 
     # Type-4: Semantically similar but structurally different
