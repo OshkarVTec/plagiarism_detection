@@ -234,7 +234,10 @@ def write_clustering_report(clusters, labels, filename="output.txt"):
     with open(filename, "w", encoding="utf-8") as out:
         out.write(f"Clustering de {len(labels)} fragmentos (pares exactos)\n\n")
         for lab, members in sorted(clusters.items()):
-            if not members:
+            if (
+                not members
+                or sum(len(intervals) for intervals in members.values()) <= 1
+            ):
                 continue
             out.write(f"Cluster {lab}:\n")
             total_members = 0
