@@ -194,6 +194,8 @@ def write_merge_clusters(clusters):
     for lab, members in clusters.items():
         if lab in processed_clusters or len(members) == 1:
             continue
+
+        merged = False
         files = members.keys()
         for other_lab, other_members in clusters.items():
             if other_lab == lab or other_lab in processed_clusters:
@@ -212,13 +214,17 @@ def write_merge_clusters(clusters):
                         merge_intervals(existing_intervals + combined_intervals)
                     )
 
-                    print(filtered_intervals)
-
                     merged_clusters.setdefault(str(merged_cluster_index), {})[f] = list(
                         filtered_intervals
                     )
                 processed_clusters.add(lab)
                 processed_clusters.add(other_lab)
+                merged = True
+
+        if not merged:
+            merged_clusters[str(merged_cluster_index)] = members
+
+        processed_clusters.add(lab)
         merged_cluster_index += 1
 
     # Save the merged clusters to a JSON file
