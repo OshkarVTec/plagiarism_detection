@@ -15,30 +15,36 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse import coo_matrix
+import json
 
 
 def collect_py_files(root_dir):
     py_files = []
     for dirpath, _, filenames in os.walk(root_dir):
         for fn in filenames:
-            if fn.endswith('.py'):
+            if fn.endswith(".py"):
                 py_files.append(os.path.join(dirpath, fn))
     return py_files
 
 
 def index_node_types():
     types = {
-        cls: i for i, cls in enumerate(
-            [getattr(ast, name)
-             for name in dir(ast)
-             if isinstance(getattr(ast, name), type)
-             and issubclass(getattr(ast, name), ast.AST)]
+        cls: i
+        for i, cls in enumerate(
+            [
+                getattr(ast, name)
+                for name in dir(ast)
+                if isinstance(getattr(ast, name), type)
+                and issubclass(getattr(ast, name), ast.AST)
+            ]
         )
     }
     return types
 
+
 NODE2IDX = index_node_types()
 DIM = len(NODE2IDX)
+
 
 def qvg(node):
     vec = np.zeros(DIM, dtype=int)
@@ -56,8 +62,8 @@ def extract_qvg_vectors(tree, min_nodes=30):
     for node in ast.walk(tree):
         v, count = qvg(node)
         if count >= min_nodes:
-            start = getattr(node, 'lineno', None)
-            end = getattr(node, 'end_lineno', start)
+            start = getattr(node, "lineno", None)
+            end = getattr(node, "end_lineno", start)
             if start is not None:
                 vectors.append((v.astype(float), (start, end)))
     if not vectors:
@@ -73,9 +79,9 @@ def wvg(vectors, window=5, stride=1):
     vecs = [v for v, _ in vectors]
     lines = [rng for _, rng in vectors]
     for i in range(0, len(vecs) - window + 1, stride):
-        win_vec = np.sum(vecs[i:i+window], axis=0)
-        win_start = min(r[0] for r in lines[i:i+window])
-        win_end = max(r[1] for r in lines[i:i+window])
+        win_vec = np.sum(vecs[i : i + window], axis=0)
+        win_start = min(r[0] for r in lines[i : i + window])
+        win_end = max(r[1] for r in lines[i : i + window])
         pooled.append((win_vec, (win_start, win_end)))
     return pooled
 
@@ -85,8 +91,8 @@ def detect_clones(file_paths, min_nodes, window, stride, radius, length_tol):
 
     for fpath in file_paths:
         print("FILE", fpath)
-        src = open(fpath, 'r', encoding='utf-8').read()
-        raw = open(fpath, 'r', encoding='utf-8').read()
+        src = open(fpath, "r", encoding="utf-8").read()
+        raw = open(fpath, "r", encoding="utf-8").read()
         src = raw.expandtabs(4)
         tree = ast.parse(src)
         qv = extract_qvg_vectors(tree, min_nodes)
@@ -107,8 +113,8 @@ def detect_clones(file_paths, min_nodes, window, stride, radius, length_tol):
     X_norm = X / np.where(norms != 0, norms, 1)
 
     # construir grafo LSH y extraer pares aproximados
-    nbrs = NearestNeighbors(radius=radius, metric='cosine').fit(X_norm)
-    adj = nbrs.radius_neighbors_graph(X_norm, mode='connectivity').tocoo()
+    nbrs = NearestNeighbors(radius=radius, metric="cosine").fit(X_norm)
+    adj = nbrs.radius_neighbors_graph(X_norm, mode="connectivity").tocoo()
     raw_pairs = {(i, j) for i, j in zip(adj.row, adj.col) if i < j}
     print(f"Pares crudos encontrados: {len(raw_pairs)}")
 
@@ -116,19 +122,17 @@ def detect_clones(file_paths, min_nodes, window, stride, radius, length_tol):
     cross = [(i, j) for i, j in raw_pairs if file_map[i] != file_map[j]]
     print(f"Pares entre ficheros distintos: {len(cross)}")
 
-    # filtro de longitud y comparación exacta de snippets
+    # filtro de longitud similar
     final = []
     for i, j in cross:
         si, ei = line_ranges[i]
         sj, ej = line_ranges[j]
         l1, l2 = ei - si, ej - sj
-        if max(l1, l2) == 0: continue
+        if max(l1, l2) == 0:
+            continue
         if abs(l1 - l2) / max(l1, l2) <= length_tol:
-            lines_i = open(file_map[i], 'r', encoding='utf-8').read().splitlines()[si-1:ei]
-            lines_j = open(file_map[j], 'r', encoding='utf-8').read().splitlines()[sj-1:ej]
-            if [l.strip() for l in lines_i] == [l.strip() for l in lines_j]:
-                final.append((i, j))
-    print(f"Pares tras filtro exacto: {len(final)}")
+            final.append((i, j))
+    print(f"Pares tras filtro de longitud similar: {len(final)}")
 
     # clustering sobre pares finales (componentes conexas)
     if final:
@@ -150,7 +154,9 @@ def filter_overlapping_segments(file_map, line_ranges, members):
     for idx in members:
         by_file.setdefault(file_map[idx], []).append(idx)
     for f, idxs in by_file.items():
-        idxs_sorted = sorted(idxs, key=lambda i: -(line_ranges[i][1] - line_ranges[i][0]))
+        idxs_sorted = sorted(
+            idxs, key=lambda i: -(line_ranges[i][1] - line_ranges[i][0])
+        )
         sel = []
         for i in idxs_sorted:
             s, e = line_ranges[i]
@@ -177,60 +183,119 @@ def merge_intervals(intervals):
     return merged
 
 
-def write_clustering_report(file_map, line_ranges, labels, filename='output.txt'):
-    clusters = {}
-    for idx, lab in enumerate(labels):
-        clusters.setdefault(lab, []).append(idx)
+def write_merge_clusters(clusters):
+    """
+    Merge clusters with overlapping intervals in the same file and save the results to a JSON file.
+    """
+    merged_clusters = {}
+    merged_cluster_index = 0
 
-    with open(filename, 'w', encoding='utf-8') as out:
+    processed_clusters = set()
+    for lab, members in clusters.items():
+        if lab in processed_clusters or len(members) == 1:
+            continue
+
+        merged = False
+        files = members.keys()
+        for other_lab, other_members in clusters.items():
+            if other_lab == lab or other_lab in processed_clusters:
+                continue
+            if set(other_members.keys()) == set(files):
+                for f in files:
+                    # Combine intervals from both clusters
+                    combined_intervals = merge_intervals(members[f] + other_members[f])
+
+                    # Filter existing intervals in merged_clusters
+                    existing_intervals = merged_clusters.get(
+                        str(merged_cluster_index), {}
+                    ).get(f, [])
+
+                    filtered_intervals = set(
+                        merge_intervals(existing_intervals + combined_intervals)
+                    )
+
+                    merged_clusters.setdefault(str(merged_cluster_index), {})[f] = list(
+                        filtered_intervals
+                    )
+                processed_clusters.add(lab)
+                processed_clusters.add(other_lab)
+                merged = True
+
+        if not merged:
+            merged_clusters[str(merged_cluster_index)] = members
+
+        processed_clusters.add(lab)
+        merged_cluster_index += 1
+
+    # Save the merged clusters to a JSON file
+    with open("merged_clusters.json", "w", encoding="utf-8") as json_file:
+        json.dump(merged_clusters, json_file, indent=4, ensure_ascii=False)
+
+    print("Merged clusters saved to merged_clusters.json")
+    return merged_clusters
+
+
+def write_clustering_report(clusters, labels, filename="output.txt"):
+
+    with open(filename, "w", encoding="utf-8") as out:
         out.write(f"Clustering de {len(labels)} fragmentos (pares exactos)\n\n")
         for lab, members in sorted(clusters.items()):
-            # filtrar y luego agrupar por fichero
-            if not members:
+            if (
+                not members
+                or sum(len(intervals) for intervals in members.values()) <= 1
+            ):
                 continue
-            out.write(f"Cluster {lab} ({len(members)} miembros):\n")
-            by_file = {}
-            for i in members:
-                by_file.setdefault(file_map[i], []).append(line_ranges[i])
-            # para cada fichero, merge intervals y escribir
-            for f, intervals in by_file.items():
-                merged = merge_intervals(intervals)
-                for s, e in merged:
+            out.write(f"Cluster {lab}:\n")
+            total_members = 0
+            for f, intervals in members.items():
+                for s, e in intervals:
                     out.write(f"  - {f} líneas {s}-{e}\n")
-            out.write("\n")
+                total_members += len(intervals)
+            out.write(f"  Total miembros tras merge: {total_members}\n\n")
     print(f"Análisis de clustering escrito en {filename}")
+
+
+def group_clusters(file_map, line_ranges, labels):
+    clusters = {}
+    for idx, lab in enumerate(labels):
+        clusters.setdefault(lab, {}).setdefault(file_map[idx], []).append(
+            line_ranges[idx]
+        )
+
+    for lab, members in clusters.items():
+        for f, intervals in members.items():
+            clusters[lab][f] = merge_intervals(intervals)
+
+    return clusters
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Detector de clones AST+LSH con clustering de pares exactos'
+        description="Detector de clones AST+LSH con clustering de pares exactos"
     )
-    parser.add_argument('--root', type=str, help='directorio raíz con .py')
-    parser.add_argument('paths', nargs='*', help='archivos o directorios .py')
-    parser.add_argument('--min-nodes', type=int, default=30)
-    parser.add_argument('--window', type=int, default=1)
-    parser.add_argument('--stride', type=int, default=1)
-    parser.add_argument('--radius', type=float, default=0.05)
-    parser.add_argument('--length-tol', type=float, default=0.2)
+    parser.add_argument("--root", type=str, help="directorio raíz con .py")
+    parser.add_argument("paths", nargs="*", help="archivos o directorios .py")
+    parser.add_argument("--min-nodes", type=int, default=30)
+    parser.add_argument("--window", type=int, default=1)
+    parser.add_argument("--stride", type=int, default=1)
+    parser.add_argument("--radius", type=float, default=0.05)
+    parser.add_argument("--length-tol", type=float, default=0.2)
     args = parser.parse_args()
 
     files = collect_py_files(args.root) if args.root else []
     for p in args.paths:
         if os.path.isdir(p):
             files.extend(collect_py_files(p))
-        elif p.endswith('.py'):
+        elif p.endswith(".py"):
             files.append(p)
 
     file_map, line_ranges, clones, labels = detect_clones(
-        files,
-        args.min_nodes,
-        args.window,
-        args.stride,
-        args.radius,
-        args.length_tol
+        files, args.min_nodes, args.window, args.stride, args.radius, args.length_tol
     )
 
-    write_clustering_report(file_map, line_ranges, labels)
+    clusters = group_clusters(file_map, line_ranges, labels)
+    write_clustering_report(clusters, labels)
+    write_merge_clusters(clusters)
 
     if not clones:
         print("No se encontraron fragmentos similares.")
@@ -243,5 +308,6 @@ def main():
         sj, ej = line_ranges[j]
         print(f"{fi} líneas {si}–{ei} ≈ {fj} líneas {sj}–{ej}\n")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
