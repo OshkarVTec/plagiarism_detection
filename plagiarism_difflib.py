@@ -51,3 +51,19 @@ def detect_clone_type(code1, code2):
         pass  # Handle invalid code gracefully
 
     return "No Significant Similarity"
+
+
+def detect_type_from_files(file1, start1, end1, file2, start2, end2):
+    """
+    Detects the type of code clone between two pieces of code from files.
+    start1, end1, start2, end2 are line numbers (1-based, inclusive start, exclusive end).
+    """
+    with open(file1, "r") as f:
+        lines1 = f.readlines()
+        code1 = "".join(lines1[start1 - 1 : end1])
+
+    with open(file2, "r") as f:
+        lines2 = f.readlines()
+        code2 = "".join(lines2[start2 - 1 : end2])
+
+    return detect_clone_type(code1, code2)
