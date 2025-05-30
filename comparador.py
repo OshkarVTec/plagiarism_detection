@@ -9,6 +9,8 @@ from sklearn.metrics import (
 )
 import subprocess
 import sys
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 # Función para medir tiempo y memoria de una función dada
@@ -97,9 +99,7 @@ def run_nuestro_detector(dataset_path):
     return df
 
 
-def evaluate_deckard(df_deckard):
-    # Cargar etiquetas verdaderas
-    df_true = pd.read_csv("plagiarism_pairs.csv")
+def evaluate_deckard(df_deckard, df_true):
     # Unir por file1 y file2
     merged = pd.merge(
         df_true,
@@ -113,12 +113,10 @@ def evaluate_deckard(df_deckard):
     y_true = merged["true_label"]
     y_pred = merged["predicted_label"]
     labels = [0, 1]  # Asumiendo 0 = no plagio, 1 = plagio
-    evaluate(y_true, y_pred, labels)
+    evaluate(y_true, y_pred, labels, "deckard")
 
 
-def evaluate_nuestro(df_nuestro):
-    # Cargar etiquetas verdaderas
-    df_true = pd.read_csv("plagiarism_pairs.csv")
+def evaluate_nuestro(df_nuestro, df_true):
     # Unir por file1 y file2
     merged = pd.merge(
         df_true,
@@ -130,13 +128,23 @@ def evaluate_nuestro(df_nuestro):
     merged["predicted_label"] = merged["predicted_label"].fillna(0).astype(int)
     y_true = merged["true_label"]
     y_pred = merged["predicted_label"]
-    labels = [0, 1]  # Asumiendo 0 = no plagio, 1 = plagio
-    evaluate(y_true, y_pred, labels)
+    labels = [0, 1, 2, 3]
+    evaluate(y_true, y_pred, labels, "nuestro")
 
 
-def evaluate(y_true, y_pred, labels):
+def evaluate(y_true, y_pred, labels, name):
     print("Matriz de Confusión:")
     print(confusion_matrix(y_true, y_pred, labels=labels))
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(
+        cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels
+    )
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title("Confusion Matrix")
+    plt.savefig(f"confusion_matrix_{name}.png")
+    plt.close()
     print(f"F1 weighted: {f1_score(y_true, y_pred, average='weighted'):.4f}")
     print(f"Accuracy: {accuracy_score(y_true, y_pred):.4f}")
     print("Reporte completo:")
@@ -170,7 +178,8 @@ def main():
     print("Resultados de Nuestro:")
     print(nuestro_df.head())
 
-    evaluate_deckard(deckard_df)
+    evaluate_deckard(deckard_df, df_true)
+    evaluate_nuestro(nuestro_df, df_true)
 
 
 if __name__ == "__main__":
