@@ -97,8 +97,25 @@ def run_nuestro_detector(dataset_path):
     return df
 
 
-def evaluate(y_true, y_pred):
-    labels = [0, 1, 2, 3]
+def evaluate_deckard(df_deckard):
+    # Cargar etiquetas verdaderas
+    df_true = pd.read_csv("plagiarism_pairs.csv")
+    # Unir por file1 y file2
+    merged = pd.merge(
+        df_true,
+        df_deckard[["file1", "file2", "predicted_label"]],
+        on=["file1", "file2"],
+        how="left",
+    )
+    # Llenar NA con 0 (no detectado)
+    merged["predicted_label"] = merged["predicted_label"].fillna(0).astype(int)
+    y_true = merged["true_label"]
+    y_pred = merged["predicted_label"]
+    labels = [0, 1]  # Asumiendo 0 = no plagio, 1 = plagio
+    evaluate(y_true, y_pred, labels)
+
+
+def evaluate(y_true, y_pred, labels):
     print("Matriz de Confusión:")
     print(confusion_matrix(y_true, y_pred, labels=labels))
     print(f"F1 weighted: {f1_score(y_true, y_pred, average='weighted'):.4f}")
@@ -129,39 +146,12 @@ def main():
     )
     print(f"Nuestro tiempo: {nuestro_time:.2f} s, pico memoria: {nuestro_mem:.2f} MB")
 
-    # Para simplificar, haremos matching simple con merge de pares etiquetados vs detectados
-    # Asegúrate que columnas y formatos coinciden
-
-    def match_and_evaluate(df_detected, name):
-        print(f"\nEvaluando resultados de {name}...")
-        merge_cols = [
-            "file1",
-            "file2",
-        ]
-
-        # Para pares detectados, etiqueta predicha=1, no detectados=0
-        # Primero combinamos con pares etiquetados para evaluar
-        df_merge = pd.merge(
-            df_true,
-            df_detected[merge_cols + ["predicted_label"]],
-            on=merge_cols,
-            how="left",
-        )
-
-        df_merge["predicted_label"] = df_merge["predicted_label"].fillna(0).astype(int)
-
-        y_true = df_merge["true_label"].values
-        y_pred = df_merge["predicted_label"].values
-
-        evaluate(y_true, y_pred)
-
     print("Resultados de Deckard:")
     print(deckard_df.head())
     print("Resultados de Nuestro:")
     print(nuestro_df.head())
 
-    match_and_evaluate(deckard_df, "Deckard")
-    match_and_evaluate(nuestro_df, "Nuestro")
+    evaluate_deckard(deckard_df)
 
 
 if __name__ == "__main__":
