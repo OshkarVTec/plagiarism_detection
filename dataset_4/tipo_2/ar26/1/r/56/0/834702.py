@@ -1,0 +1,65 @@
+import bisect
+import sys
+import math
+import itertools
+sys.setrecursionlimit(10000)
+
+INF = float('inf')
+
+# input macro
+def i():
+    return int(raw_input())
+def ii():
+    return map(int,raw_input().split(" "))
+def s():
+    return raw_input()
+def ss():
+    return raw_input().split(" ")
+def slist():
+    return list(raw_input())
+#
+
+def join(s):
+    return ''.join(s)
+
+#iterate macro
+def piter(n,m):
+    return itertools.permutations(n,m)
+def citer(n,m):
+    return itertools.combinations(n,m)
+
+#modulo macro
+def modc(a,b,m):
+    c = 1
+    for i in xrange(b):
+        c = c * (a - i) % m
+        c = c * modinv(i + 1,m) % m
+    return c
+ 
+def gcd(a, b):
+    (x, lastx) = (0, 1)
+    (y, lasty) = (1, 0)
+    while b != 0:
+        q = a // b
+        (a, b) = (b, a % b)
+        (x, lastx) = (lastx - q * x, x)
+        (y, lasty) = (lasty - q * y, y)
+    return (lastx, lasty, a)
+ 
+def modinv(a, m):
+    (inv, q, gcd_val) = gcd(a, m)
+    return inv % m
+
+#memoize macro
+def memoize(f):
+    cache = {}
+    def helper(*args):
+        if args not in cache:
+            cache[(args)] = f(*args)
+        return cache[args]
+    return helper
+
+###########
+
+a,b,k,l = ii()
+print(int(k/l)*b+min([(k%l)*a,b]))
