@@ -7,9 +7,9 @@ import itertools
 
 # Configuración básica de logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 
 class ASTVectorizer(ast.NodeVisitor):
     def __init__(self, vocab):
@@ -32,7 +32,7 @@ class ASTVectorizer(ast.NodeVisitor):
             if size >= min_size:
                 vec = np.array([self.counter[t] for t in self.vocab], dtype=float)
                 self.vectors.append(vec)
-                self.locations.append(getattr(node, 'lineno', None))
+                self.locations.append(getattr(node, "lineno", None))
         return self.vectors, self.locations
 
 
@@ -65,7 +65,7 @@ class LSHIndex:
 def sliding_window_merge(vectors, locations, window_size=3):
     merged, merged_locs = [], []
     for i in range(len(vectors) - window_size + 1):
-        window_sum = np.sum(vectors[i:i+window_size], axis=0)
+        window_sum = np.sum(vectors[i : i + window_size], axis=0)
         merged.append(window_sum)
         merged_locs.append(locations[i])
     return merged, merged_locs
@@ -73,12 +73,16 @@ def sliding_window_merge(vectors, locations, window_size=3):
 
 def detect_clones_in_file(path, lsh_index, vocab, min_size=5, window_size=3):
     logging.info("Parsing and vectorizing %s", path)
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read(), filename=path)
     vecs, locs = ASTVectorizer(vocab).extract_vectors(tree, min_size=min_size)
     logging.info("  → %d subárboles ≥ %d nodos", len(vecs), min_size)
     merged_vecs, merged_locs = sliding_window_merge(vecs, locs, window_size=window_size)
-    logging.info("  → %d vectores tras ventana deslizante de tamaño %d", len(merged_vecs), window_size)
+    logging.info(
+        "  → %d vectores tras ventana deslizante de tamaño %d",
+        len(merged_vecs),
+        window_size,
+    )
     for vec, loc in zip(merged_vecs, merged_locs):
         lsh_index.insert(vec, (path, loc))
 
@@ -86,7 +90,7 @@ def detect_clones_in_file(path, lsh_index, vocab, min_size=5, window_size=3):
 def find_clones(lsh_index, min_dist=5.0):
     clones = []
     for idx, table in enumerate(lsh_index.tables):
-        logging.info("Revisando tabla LSH %d/%d", idx+1, lsh_index.L)
+        logging.info("Revisando tabla LSH %d/%d", idx + 1, lsh_index.L)
         for bucket in table.values():
             for (v1, loc1), (v2, loc2) in itertools.combinations(bucket, 2):
                 dist = np.linalg.norm(v1 - v2)
@@ -95,21 +99,19 @@ def find_clones(lsh_index, min_dist=5.0):
     return clones
 
 
-def run_deckard_on_directory(directory,
-                             min_size=5,
-                             window_size=3,
-                             min_dist=5.0,
-                             k=5, L=10, w=4.0):
+def run_deckard_on_directory(
+    directory, min_size=5, window_size=3, min_dist=5.0, k=5, L=10, w=4.0
+):
     logging.info("Iniciando análisis en directorio: %s", directory)
 
     # 1) Construir vocabulario global de tipos de nodo
     node_types = set()
     for root, _, files in os.walk(directory):
         for f in files:
-            if f.endswith('.py'):
+            if f.endswith(".py"):
                 full = os.path.join(root, f)
                 logging.debug("  → escaneando nodos de %s", full)
-                tree = ast.parse(open(full, 'r', encoding='utf-8').read())
+                tree = ast.parse(open(full, "r", encoding="utf-8").read())
                 for node in ast.walk(tree):
                     node_types.add(type(node).__name__)
     if not node_types:
@@ -126,30 +128,28 @@ def run_deckard_on_directory(directory,
     total_files = 0
     for root, _, files in os.walk(directory):
         for file in files:
-            if file.endswith('.py'):
+            if file.endswith(".py"):
                 total_files += 1
                 path = os.path.join(root, file)
-                detect_clones_in_file(path, lsh, vocab,
-                                      min_size=min_size,
-                                      window_size=window_size)
+                detect_clones_in_file(
+                    path, lsh, vocab, min_size=min_size, window_size=window_size
+                )
     logging.info("Procesados %d archivos .py", total_files)
 
     # 4) Detectar clones
     clones = find_clones(lsh, min_dist=min_dist)
-    logging.info("Detección completa: se encontraron %d pares de clones (dist < %.1f)", len(clones), min_dist)
+    logging.info(
+        "Detección completa: se encontraron %d pares de clones (dist < %.1f)",
+        len(clones),
+        min_dist,
+    )
     return clones
 
 
 if __name__ == "__main__":
     base_dir = "dataset_4"  # ajusta a tu ruta
     clones = run_deckard_on_directory(
-        base_dir,
-        min_size=5,
-        window_size=3,
-        min_dist=5.0,
-        k=5,
-        L=10,
-        w=4.0
+        base_dir, min_size=5, window_size=3, min_dist=5.0, k=5, L=10, w=4.0
     )
-    for loc1, loc2, dist in clones:
-        print(f"Clone between {loc1} and {loc2} (distance: {dist:.2f})")
+    # for loc1, loc2, dist in clones:
+    # print(f"Clone between {loc1} and {loc2} (distance: {dist:.2f})")

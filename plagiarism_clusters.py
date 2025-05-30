@@ -90,7 +90,7 @@ def detect_clones(file_paths, min_nodes, window, stride, radius, length_tol):
     all_vecs, line_ranges, file_map = [], [], []
 
     for fpath in file_paths:
-        print("FILE", fpath)
+        ##print("FILE", fpath)
         src = open(fpath, "r", encoding="utf-8").read()
         raw = open(fpath, "r", encoding="utf-8").read()
         src = raw.expandtabs(4)
@@ -103,9 +103,9 @@ def detect_clones(file_paths, min_nodes, window, stride, radius, length_tol):
             line_ranges.append((s, e))
             file_map.append(fpath)
 
-    print(f"Total vectores extraídos: {len(all_vecs)}")
+    # print(f"Total vectores extraídos: {len(all_vecs)}")
     if not all_vecs:
-        print("⚠️  No se extrajeron vectores.")
+        # print("⚠️  No se extrajeron vectores.")
         return file_map, line_ranges, [], None
 
     X = np.stack(all_vecs)
@@ -116,11 +116,11 @@ def detect_clones(file_paths, min_nodes, window, stride, radius, length_tol):
     nbrs = NearestNeighbors(radius=radius, metric="cosine").fit(X_norm)
     adj = nbrs.radius_neighbors_graph(X_norm, mode="connectivity").tocoo()
     raw_pairs = {(i, j) for i, j in zip(adj.row, adj.col) if i < j}
-    print(f"Pares crudos encontrados: {len(raw_pairs)}")
+    # print(f"Pares crudos encontrados: {len(raw_pairs)}")
 
     # filtrar pares entre ficheros distintos
     cross = [(i, j) for i, j in raw_pairs if file_map[i] != file_map[j]]
-    print(f"Pares entre ficheros distintos: {len(cross)}")
+    # print(f"Pares entre ficheros distintos: {len(cross)}")
 
     # filtro de longitud similar
     final = []
@@ -132,7 +132,7 @@ def detect_clones(file_paths, min_nodes, window, stride, radius, length_tol):
             continue
         if abs(l1 - l2) / max(l1, l2) <= length_tol:
             final.append((i, j))
-    print(f"Pares tras filtro de longitud similar: {len(final)}")
+    # print(f"Pares tras filtro de longitud similar: {len(final)}")
 
     # clustering sobre pares finales (componentes conexas)
     if final:
@@ -142,7 +142,7 @@ def detect_clones(file_paths, min_nodes, window, stride, radius, length_tol):
         data = [1] * len(rows)
         adj_final = coo_matrix((data, (rows, cols)), shape=(N, N))
         n_comp, labels = connected_components(adj_final, directed=False)
-        print(f"Componentes conexas finales: {n_comp}")
+        # print(f"Componentes conexas finales: {n_comp}")
     else:
         labels = np.arange(len(file_map))
 
@@ -231,7 +231,7 @@ def write_merge_clusters(clusters):
     with open("merged_clusters.json", "w", encoding="utf-8") as json_file:
         json.dump(merged_clusters, json_file, indent=4, ensure_ascii=False)
 
-    print("Merged clusters saved to merged_clusters.json")
+    # print("Merged clusters saved to merged_clusters.json")
     return merged_clusters
 
 
@@ -252,7 +252,7 @@ def write_clustering_report(clusters, labels, filename="output.txt"):
                     out.write(f"  - {f} líneas {s}-{e}\n")
                 total_members += len(intervals)
             out.write(f"  Total miembros tras merge: {total_members}\n\n")
-    print(f"Análisis de clustering escrito en {filename}")
+    # print(f"Análisis de clustering escrito en {filename}")
 
 
 def group_clusters(file_map, line_ranges, labels):
@@ -298,15 +298,15 @@ def main():
     write_merge_clusters(clusters)
 
     if not clones:
-        print("No se encontraron fragmentos similares.")
+        # print("No se encontraron fragmentos similares.")
         return
 
-    print("\nFragmentos similares detectados:\n")
+    # print("\nFragmentos similares detectados:\n")
     for i, j in clones:
         fi, fj = file_map[i], file_map[j]
         si, ei = line_ranges[i]
         sj, ej = line_ranges[j]
-        print(f"{fi} líneas {si}–{ei} ≈ {fj} líneas {sj}–{ej}\n")
+        # print(f"{fi} líneas {si}–{ei} ≈ {fj} líneas {sj}–{ej}\n")
 
 
 if __name__ == "__main__":
