@@ -109,6 +109,25 @@ def evaluate_deckard(df_deckard):
     )
     # Llenar NA con 0 (no detectado)
     merged["predicted_label"] = merged["predicted_label"].fillna(0).astype(int)
+    merged["true_label"] = merged["true_label"].apply(lambda x: 1 if x > 1 else x)
+    y_true = merged["true_label"]
+    y_pred = merged["predicted_label"]
+    labels = [0, 1]  # Asumiendo 0 = no plagio, 1 = plagio
+    evaluate(y_true, y_pred, labels)
+
+
+def evaluate_nuestro(df_nuestro):
+    # Cargar etiquetas verdaderas
+    df_true = pd.read_csv("plagiarism_pairs.csv")
+    # Unir por file1 y file2
+    merged = pd.merge(
+        df_true,
+        df_nuestro[["file1", "file2", "predicted_label"]],
+        on=["file1", "file2"],
+        how="left",
+    )
+    # Llenar NA con 0 (no detectado)
+    merged["predicted_label"] = merged["predicted_label"].fillna(0).astype(int)
     y_true = merged["true_label"]
     y_pred = merged["predicted_label"]
     labels = [0, 1]  # Asumiendo 0 = no plagio, 1 = plagio
