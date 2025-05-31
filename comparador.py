@@ -47,7 +47,8 @@ def run_deckard_detector(dataset_path):
         try:
             (file1, line1), (file2, line2), dist = item
             # print( f"file1={file1}, line1={line1}, file2={file2}, line2={line2}, dist={dist}")
-
+            file1 = "/".join(file1.split("/")[1:])
+            file2 = "/".join(file2.split("/")[1:])
             rows.append(
                 {
                     "file1": file1,
@@ -84,6 +85,8 @@ def run_nuestro_detector(dataset_path):
         s1, e1 = line_ranges[i]
         f2 = file_map[j]
         s2, e2 = line_ranges[j]
+        f1 = "/".join(f1.split("/")[1:])
+        f2 = "/".join(f2.split("/")[1:])
         rows.append(
             {
                 "file1": f1,
@@ -110,6 +113,7 @@ def evaluate_deckard(df_deckard, df_true):
     # Llenar NA con 0 (no detectado)
     merged["predicted_label"] = merged["predicted_label"].fillna(0).astype(int)
     merged["true_label"] = merged["true_label"].apply(lambda x: 1 if x > 1 else x)
+    print(merged.head())
     y_true = merged["true_label"]
     y_pred = merged["predicted_label"]
     labels = [0, 1]  # Asumiendo 0 = no plagio, 1 = plagio
@@ -153,7 +157,7 @@ def evaluate(y_true, y_pred, labels, name):
 
 def main():
     # Ruta dataset y CSV con etiquetas verdaderas
-    dataset_path = "dataset_test"  # ajusta a tu ruta
+    dataset_path = "dataset_4"  # ajusta a tu ruta
     csv_etiquetado = "plagiarism_pairs.csv"
 
     # Carga etiquetas verdaderas
