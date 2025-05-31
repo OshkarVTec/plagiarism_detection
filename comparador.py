@@ -11,6 +11,9 @@ import subprocess
 import sys
 import seaborn as sns
 import matplotlib.pyplot as plt
+from plagiarism_difflib import detect_clone_type
+
+DATASET_PATH = "dataset_test"
 
 
 # Función para medir tiempo y memoria de una función dada
@@ -28,9 +31,45 @@ def run_with_profiler(func, *args, **kwargs):
 
 # Funciones adaptadas para ejecutar ambos detectores y devolver DataFrame con pares detectados
 # **Debes adaptar deckard.py y Nuestro.py para exportar funciones que hagan lo siguiente**
+def normalize_pairs(df):
+    file1_new = []
+    file2_new = []
+    for f1, f2 in zip(df["file1"], df["file2"]):
+        if f1 < f2:
+            file1_new.append(f1)
+            file2_new.append(f2)
+        else:
+            file1_new.append(f2)
+            file2_new.append(f1)
+    df["file1"] = file1_new
+    df["file2"] = file2_new
+    return df
 
 
-def run_deckard_detector(dataset_path):
+def extract_code_fragment(filepath, start, end):
+    filepath = DATASET_PATH + "/" + filepath
+    with open(filepath, "r") as f:
+        lines = f.readlines()
+    # Ajusta los índices si tus líneas son 1-based
+    return "".join(lines[start - 1 : end])
+
+
+def update_predicted_label(df):
+    types = []
+    for idx, row in df.iterrows():
+        code1 = extract_code_fragment(
+            row["file1"], row["line_start1"], row["line_end1"]
+        )
+        code2 = extract_code_fragment(
+            row["file2"], row["line_start2"], row["line_end2"]
+        )
+        tipo = detect_clone_type(code1, code2)
+        types.append(tipo)
+    df["predicted_label"] = types
+    return df
+
+
+def run_deckard_detector(DATASET_PATH):
     """
     Ejecuta el detector deckard.py y devuelve DataFrame con columnas:
     file1, line_start1, line_end1, file2, line_start2, line_end2, predicted_label=1
@@ -38,7 +77,7 @@ def run_deckard_detector(dataset_path):
     import deckard  # asumiendo deckard.py está modularizado
 
     clones = deckard.run_deckard_on_directory(
-        dataset_path, min_size=5, window_size=3, min_dist=5.0, k=5, L=10, w=4.0
+        DATASET_PATH, min_size=5, window_size=3, min_dist=5.0, k=5, L=10, w=4.0
     )
     rows = []
     # print(f"Tipo de clones: {type(clones)}")
@@ -67,13 +106,13 @@ def run_deckard_detector(dataset_path):
     return df
 
 
-def run_nuestro_detector(dataset_path):
+def run_nuestro_detector(DATASET_PATH):
     """
     Ejecuta el detector Nuestro.py y devuelve DataFrame con columnas similares.
     """
     import plagiarism_clusters  # asumiendo nuestro.py modularizado
 
-    files = plagiarism_clusters.collect_py_files(dataset_path)
+    files = plagiarism_clusters.collect_py_files(DATASET_PATH)
     # rint("NUESTRO")
     # print(files)
     file_map, line_ranges, clones, labels = plagiarism_clusters.detect_clones(
@@ -99,36 +138,49 @@ def run_nuestro_detector(dataset_path):
             }
         )
     df = pd.DataFrame(rows)
+    df = update_predicted_label(df)
     return df
 
 
 def evaluate_deckard(df_deckard, df_true):
-    # Unir por file1 y file2
-    merged = pd.merge(
-        df_true,
-        df_deckard[["file1", "file2", "predicted_label"]],
-        on=["file1", "file2"],
-        how="left",
+    df_deckard = normalize_pairs(df_deckard)
+    df_true = normalize_pairs(df_true)
+    # Eliminar duplicados donde (file1, file2) == (file2, file1)
+    df_deckard["pair"] = df_deckard.apply(
+        lambda row: tuple(sorted([row["file1"], row["file2"]])), axis=1
     )
-    # Llenar NA con 0 (no detectado)
+    df_deckard = df_deckard.drop_duplicates(subset="pair").drop(columns="pair")
+    merge_cols = [
+        "file1",
+        "file2",
+    ]
+    merged = pd.merge(
+        df_true, df_deckard, on=merge_cols, how="left", suffixes=("_true", "_pred")
+    )
+    # Si no hay predicción, es 0 (no detectado)
     merged["predicted_label"] = merged["predicted_label"].fillna(0).astype(int)
-    merged["true_label"] = merged["true_label"].apply(lambda x: 1 if x > 1 else x)
-    print(merged.head())
     y_true = merged["true_label"]
     y_pred = merged["predicted_label"]
-    labels = [0, 1]  # Asumiendo 0 = no plagio, 1 = plagio
+    print(y_pred)
+    print(y_true)
+    y_true = y_true.apply(lambda x: 1 if x > 1 else x)
+    labels = [0, 1]  # 0 = no plagio, 1 = plagio
     evaluate(y_true, y_pred, labels, "deckard")
 
 
 def evaluate_nuestro(df_nuestro, df_true):
-    # Unir por file1 y file2
+    df_nuestro = normalize_pairs(df_nuestro)
+    df_true = normalize_pairs(df_true)
+    idx = df_nuestro.groupby(["file1", "file2"])["predicted_label"].idxmax()
+    df_nuestro = df_nuestro.loc[idx].reset_index(drop=True)
+    merge_cols = [
+        "file1",
+        "file2",
+    ]
     merged = pd.merge(
-        df_true,
-        df_nuestro[["file1", "file2", "predicted_label"]],
-        on=["file1", "file2"],
-        how="left",
+        df_true, df_nuestro, on=merge_cols, how="left", suffixes=("_true", "_pred")
     )
-    # Llenar NA con 0 (no detectado)
+    # Si no hay predicción, es 0 (no detectado)
     merged["predicted_label"] = merged["predicted_label"].fillna(0).astype(int)
     y_true = merged["true_label"]
     y_pred = merged["predicted_label"]
@@ -156,8 +208,6 @@ def evaluate(y_true, y_pred, labels, name):
 
 
 def main():
-    # Ruta dataset y CSV con etiquetas verdaderas
-    dataset_path = "dataset_4"  # ajusta a tu ruta
     csv_etiquetado = "plagiarism_pairs.csv"
 
     # Carga etiquetas verdaderas
@@ -166,14 +216,14 @@ def main():
     # Ejecutar Deckard
     print("Ejecutando Deckard...")
     deckard_df, deckard_time, deckard_mem = run_with_profiler(
-        run_deckard_detector, dataset_path
+        run_deckard_detector, DATASET_PATH
     )
     print(f"Deckard tiempo: {deckard_time:.2f} s, pico memoria: {deckard_mem:.2f} MB")
 
     # Ejecutar Nuestro
     print("Ejecutando Nuestro...")
     nuestro_df, nuestro_time, nuestro_mem = run_with_profiler(
-        run_nuestro_detector, dataset_path
+        run_nuestro_detector, DATASET_PATH
     )
     print(f"Nuestro tiempo: {nuestro_time:.2f} s, pico memoria: {nuestro_mem:.2f} MB")
 
