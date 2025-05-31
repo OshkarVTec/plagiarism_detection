@@ -22,7 +22,7 @@ def detect_clone_type(code1, code2):
 
     # Type-1: Identical except for whitespace, formatting, or comments
     if normalized_code1 == normalized_code2:
-        return "Type-1 Clone: Identical except for whitespace, formatting, or comments"
+        return 1
 
     # Tokenize the code
     tokenized_code1 = tokenize_code(code1)
@@ -30,16 +30,16 @@ def detect_clone_type(code1, code2):
 
     # Type-2: Structurally identical but differ in identifiers, literals, or function names
     if tokenized_code1 == tokenized_code2:
-        return "Type-2 Clone: Structurally identical with minor differences (e.g., identifiers)"
+        return 2
 
     # Check similarity
 
     similarity = calculate_similarity(tokenized_code1, tokenized_code2)
-    print(f"Similarity: {similarity}")
+    # print(f"Similarity: {similarity}")
 
     # Type-3: Near-miss copies with small modifications (e.g., added/removed/changed statements)
     if similarity > 0.5:  # Lower threshold for near-miss similarity
-        return "Type-3 Clone: Near-miss copy with small modifications"
+        return 3
 
     # Type-4: Semantically similar but structurally different
     try:
@@ -50,4 +50,4 @@ def detect_clone_type(code1, code2):
     except SyntaxError:
         pass  # Handle invalid code gracefully
 
-    return "No Significant Similarity"
+    return 0
