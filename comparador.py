@@ -13,7 +13,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from plagiarism_difflib import detect_clone_type
 
-DATASET_PATH = "dataset_test"
+DATASET_PATH = "dataset_4"
 
 
 # Función para medir tiempo y memoria de una función dada
