@@ -45,19 +45,33 @@ def tokenize_code(code):
     return " ".join(tokens_list)
 
 
+def safe_tokenize_code(code):
+    try:
+        return tokenize_code(code)
+    except (tokenize.TokenError, IndentationError):
+        cleaned_code = "\n".join(line.lstrip() for line in code.splitlines())
+        wrapped_code = "def _dummy():\n"
+        wrapped_code += "\n".join("    " + line for line in cleaned_code.splitlines())
+        try:
+            return tokenize_code(wrapped_code)
+        except Exception as e:
+            print("Tokenization failed:", e)
+            return ""
+
+
 def normalize_code(code):
     """
     Normalize the code by removing comments, whitespace, and newlines.
     Returns a string of token names representing the code structure.
     """
-    tokens_list = []
-    code_bytes = code.encode("utf-8")
-    readline = BytesIO(code_bytes).readline
 
-    try:
+    def _normalize(c):
+        tokens_list = []
+        code_bytes = c.encode("utf-8")
+        readline = BytesIO(code_bytes).readline
+
         for tok in tokenize.tokenize(readline):
             token_type = tok.type
-
             # Ignore encoding, end markers, comments, newlines, and whitespace
             if token_type in (
                 tokenize.ENCODING,
@@ -69,13 +83,22 @@ def normalize_code(code):
                 tokenize.DEDENT,
             ):
                 continue
-
-            # Add the token string to the list
             tokens_list.append(tok.string)
-    except tokenize.TokenError as e:
-        print("Error tokenizing the code:", e)
+        return " ".join(tokens_list)
 
-    return " ".join(tokens_list)
+    try:
+        return _normalize(code)
+    except (tokenize.TokenError, IndentationError):
+        # Try wrapping in a dummy function if code fragment fails
+        cleaned_code = "\n".join(line.lstrip() for line in code.splitlines())
+        wrapped_code = "def _dummy():\n" + "\n".join(
+            "    " + line for line in cleaned_code.splitlines()
+        )
+        try:
+            return _normalize(wrapped_code)
+        except Exception as e:
+            print("Normalization failed:", e)
+            return ""
 
 
 def save_preprocessed_code(

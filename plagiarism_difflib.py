@@ -1,6 +1,5 @@
 import difflib
-from tokenizer import tokenize_code, normalize_code
-import ast
+from tokenizer import safe_tokenize_code, normalize_code
 
 
 def calculate_similarity(tokenized_code1, tokenized_code2):
@@ -25,8 +24,8 @@ def detect_clone_type(code1, code2):
         return 1
 
     # Tokenize the code
-    tokenized_code1 = tokenize_code(code1)
-    tokenized_code2 = tokenize_code(code2)
+    tokenized_code1 = safe_tokenize_code(code1)
+    tokenized_code2 = safe_tokenize_code(code2)
 
     # Type-2: Structurally identical but differ in identifiers, literals, or function names
     if tokenized_code1 == tokenized_code2:
@@ -38,16 +37,23 @@ def detect_clone_type(code1, code2):
     # print(f"Similarity: {similarity}")
 
     # Type-3: Near-miss copies with small modifications (e.g., added/removed/changed statements)
-    if similarity > 0.5:  # Lower threshold for near-miss similarity
+    if similarity > 0.4:  # Lower threshold for near-miss similarity
         return 3
 
-    # Type-4: Semantically similar but structurally different
-    try:
-        tree1 = ast.parse(code1)
-        tree2 = ast.parse(code2)
-        if ast.dump(tree1) == ast.dump(tree2):
-            return "Type-4 Clone: Semantically similar but structurally different"
-    except SyntaxError:
-        pass  # Handle invalid code gracefully
+    return -1
 
-    return 0
+
+def detect_type_from_files(file1, start1, end1, file2, start2, end2):
+    """
+    Detects the type of code clone between two pieces of code from files.
+    start1, end1, start2, end2 are line numbers (1-based, inclusive start, exclusive end).
+    """
+    with open(file1, "r") as f:
+        lines1 = f.readlines()
+        code1 = "".join(lines1[start1 - 1 : end1])
+
+    with open(file2, "r") as f:
+        lines2 = f.readlines()
+        code2 = "".join(lines2[start2 - 1 : end2])
+
+    return detect_clone_type(code1, code2)
