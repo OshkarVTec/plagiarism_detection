@@ -103,11 +103,11 @@ def run_deckard_detector(DATASET_PATH):
             # print(f"Error al desempaquetar clone #{idx}: {e}")
             break
     df_deckard = pd.DataFrame(rows)
+    df_deckard = normalize_pairs(df_deckard)
     # Eliminar duplicados donde (file1, file2) == (file2, file1)
     df_deckard["pair"] = df_deckard.apply(
         lambda row: tuple(sorted([row["file1"], row["file2"]])), axis=1
     )
-    df_deckard = normalize_pairs(df_deckard)
     df_deckard = df_deckard.drop_duplicates(subset="pair").drop(columns="pair")
     return df_deckard
 
@@ -122,7 +122,7 @@ def run_nuestro_detector(DATASET_PATH):
     # rint("NUESTRO")
     # print(files)
     file_map, line_ranges, clones, labels = plagiarism_clusters.detect_clones(
-        files, min_nodes=40, window=5, stride=5, radius=0.05, length_tol=0.2
+        files, min_nodes=30, window=5, stride=5, radius=0.05, length_tol=0.2
     )
     rows = []
     for i, j in clones:
@@ -144,10 +144,10 @@ def run_nuestro_detector(DATASET_PATH):
             }
         )
     df_nuestro = pd.DataFrame(rows)
+    df_nuestro = normalize_pairs(df_nuestro)
     df_nuestro = df_nuestro.drop_duplicates(subset=["file1", "file2"]).reset_index(
         drop=True
     )
-    df_nuestro = normalize_pairs(df_nuestro)
     df_nuestro = update_predicted_label(df_nuestro)
     return df_nuestro
 
