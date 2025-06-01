@@ -46,26 +46,26 @@ def normalize_pairs(df):
     return df
 
 
-def extract_code_fragment(filepath, start, end):
+def extract_full_code(filepath):
+    """
+    Extrae todo el código de un archivo dado.
+    """
     filepath = DATASET_PATH + "/" + filepath
     with open(filepath, "r") as f:
-        lines = f.readlines()
-    # Ajusta los índices si tus líneas son 1-based
-    return "".join(lines[start - 1 : end])
+        return f.read()
 
 
 def update_predicted_label(df):
-    types = []
-    for idx, row in df.iterrows():
-        code1 = extract_code_fragment(
-            row["file1"], row["line_start1"], row["line_end1"]
-        )
-        code2 = extract_code_fragment(
-            row["file2"], row["line_start2"], row["line_end2"]
-        )
-        tipo = detect_clone_type(code1, code2)
-        types.append(tipo)
-    df["predicted_label"] = types
+    """
+    Actualiza la columna predicted_label en el DataFrame df.
+    Asigna el valor que regresa detect_clone_type para cada par (file1, file2).
+    """
+    df["predicted_label"] = df.apply(
+        lambda row: detect_clone_type(
+            extract_full_code(row["file1"]), extract_full_code(row["file2"])
+        ),
+        axis=1,
+    )
     return df
 
 
@@ -77,7 +77,7 @@ def run_deckard_detector(DATASET_PATH):
     import deckard  # asumiendo deckard.py está modularizado
 
     clones = deckard.run_deckard_on_directory(
-        DATASET_PATH, min_size=5, window_size=3, min_dist=5.0, k=5, L=10, w=4.0
+        DATASET_PATH, min_size=30, window_size=5, min_dist=5.0, k=5, L=10, w=4.0
     )
     rows = []
     # print(f"Tipo de clones: {type(clones)}")
@@ -102,8 +102,14 @@ def run_deckard_detector(DATASET_PATH):
         except Exception as e:
             # print(f"Error al desempaquetar clone #{idx}: {e}")
             break
-    df = pd.DataFrame(rows)
-    return df
+    df_deckard = pd.DataFrame(rows)
+    # Eliminar duplicados donde (file1, file2) == (file2, file1)
+    df_deckard["pair"] = df_deckard.apply(
+        lambda row: tuple(sorted([row["file1"], row["file2"]])), axis=1
+    )
+    df_deckard = normalize_pairs(df_deckard)
+    df_deckard = df_deckard.drop_duplicates(subset="pair").drop(columns="pair")
+    return df_deckard
 
 
 def run_nuestro_detector(DATASET_PATH):
@@ -116,7 +122,7 @@ def run_nuestro_detector(DATASET_PATH):
     # rint("NUESTRO")
     # print(files)
     file_map, line_ranges, clones, labels = plagiarism_clusters.detect_clones(
-        files, min_nodes=30, window=1, stride=1, radius=0.05, length_tol=0.2
+        files, min_nodes=40, window=5, stride=5, radius=0.05, length_tol=0.2
     )
     rows = []
     for i, j in clones:
@@ -137,19 +143,16 @@ def run_nuestro_detector(DATASET_PATH):
                 "predicted_label": 1,
             }
         )
-    df = pd.DataFrame(rows)
-    df = update_predicted_label(df)
-    return df
+    df_nuestro = pd.DataFrame(rows)
+    df_nuestro = df_nuestro.drop_duplicates(subset=["file1", "file2"]).reset_index(
+        drop=True
+    )
+    df_nuestro = normalize_pairs(df_nuestro)
+    df_nuestro = update_predicted_label(df_nuestro)
+    return df_nuestro
 
 
 def evaluate_deckard(df_deckard, df_true):
-    df_deckard = normalize_pairs(df_deckard)
-    df_true = normalize_pairs(df_true)
-    # Eliminar duplicados donde (file1, file2) == (file2, file1)
-    df_deckard["pair"] = df_deckard.apply(
-        lambda row: tuple(sorted([row["file1"], row["file2"]])), axis=1
-    )
-    df_deckard = df_deckard.drop_duplicates(subset="pair").drop(columns="pair")
     merge_cols = [
         "file1",
         "file2",
@@ -169,10 +172,6 @@ def evaluate_deckard(df_deckard, df_true):
 
 
 def evaluate_nuestro(df_nuestro, df_true):
-    df_nuestro = normalize_pairs(df_nuestro)
-    df_true = normalize_pairs(df_true)
-    idx = df_nuestro.groupby(["file1", "file2"])["predicted_label"].idxmax()
-    df_nuestro = df_nuestro.loc[idx].reset_index(drop=True)
     merge_cols = [
         "file1",
         "file2",
@@ -212,6 +211,7 @@ def main():
 
     # Carga etiquetas verdaderas
     df_true = pd.read_csv(csv_etiquetado)
+    df_true = normalize_pairs(df_true)
 
     # Ejecutar Deckard
     print("Ejecutando Deckard...")
