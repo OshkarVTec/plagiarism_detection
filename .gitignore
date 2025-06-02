@@ -178,3 +178,9 @@ cython_debug/
 
 # Dummy files
 dummy_*.py
+
+user_table.txt
+similitudes.py
+output.txt
+merged_clusters.json
+etiquetado.py
